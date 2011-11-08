@@ -1093,6 +1093,8 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Connect Graph", "Ctrl+F8", 0, self.MilfConnGraph, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous functions", "Ctrl+F9", 0, self.MilfMarkDangerous, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark immediate compares", "Ctrl+F10", 0, self.MarkImmCompares, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Locate allocs", "Ctrl+F11", 0, self.MilfLocateAllocs, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Locate network IO", "Ctrl+F12", 0, self.MilfLocateNetIO, ())
 
 	
 	def run(self, arg = 0):
@@ -1106,7 +1108,7 @@ class MilfPlugin(idaapi.plugin_t):
 		self.AddMenuElements()
 	
 	def MilfMarkDangerous(self):
-		pass
+		self.ia.mark_dangerous()
 	
 	
 	def MarkImmCompares(self):
@@ -1118,6 +1120,12 @@ class MilfPlugin(idaapi.plugin_t):
 		moduleFunctions = [[hex(x), GetFunctionName(x)] for x in Functions()]
 		MilfFuncSelector("Select Functions to Connect", moduleFunctions, self.icon_id, parent = self).show()
 
+
+	def MilfLocateAllocs(self):
+		self.ia.locate_allocs(interactive = True)
+		
+	def MilfLocateNetIO(self):
+		self.ia.locate_net_io(interactive = True)
 		
 		
 	def term(self):
@@ -1194,14 +1202,16 @@ class MilfForm(Form):
 ###################################################################################################
 class MilfFuncSelector(Choose2):
 	'''
-	Chooser class. Let's keep thing pretty :P
+	Chooser class. Let's keep things pretty :P
 	'''
 	
 	def __init__(self, title, items, icon, parent, embedded = False):
-		Choose2.__init__(self, title, [["Address", 12], ["Functions", 50]], embedded = embedded)
+		Choose2.__init__(self, title, [["Address", 12], ["Functions", 30]], embedded = embedded)
 		self.items = items
 		self.icon = icon
 		self.parent = parent
+		self.g_origin = None
+		self.g_destination = None
 		
 	def GetItems(self):
 		return self.items
@@ -1225,18 +1235,19 @@ class MilfFuncSelector(Choose2):
 	def OnCommand(self, n, cmd_id):
 		if cmd_id == self.cmd_origin:
 			# mark as source
-			g_origin = self.items[n][1]
-			print "[debug] Graph origin: %s" % g_origin
+			self.g_origin = self.items[n][1]
+			print "[debug] Graph origin: %s" % self.g_origin
 		elif cmd_id == self.cmd_dst:
 			# mark as destination
-			g_destination = self.items[n][1]
-			print "[debug] Graph destination: %s" % g_destination
+			self.g_destination = self.items[n][1]
+			print "[debug] Graph destination: %s" % self.g_destination
 		elif cmd_id == self.cmd_graph:
 			# Graph it!
-			print "[debug] Creating Graph: %s -> %s" % (g_origin, g_destination)
-			gc = self.parent.connect_graph(g_origin, g_destination)
+			print "[debug] Creating Graph: %s -> %s" % (self.g_origin, self.g_destination)
+			gc = self.parent.ia.connect_graph(self.g_origin, self.g_destination)
 			if gc:
-				ConnectGraph(gc)
+				gv = ConnectGraph(gc)
+				gv.Show()
 				
 		else:
 			print "[debug] Command not understood"
@@ -1250,6 +1261,7 @@ class MilfFuncSelector(Choose2):
 		if t < 0:
 			return False
 		else:
+			# Add some context menus :)
 			self.cmd_origin = self.AddCommand("Set as origin")
 			self.cmd_dst = self.AddCommand("Set as destination")
 			self.cmd_graph = self.AddCommand("Graph it")
