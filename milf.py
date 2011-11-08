@@ -624,7 +624,7 @@ class IDAnalyzer():
 		
 	
 	
-	def dangerous_size_param(self):
+	def dangerous_size_param(self, mark = False):
 		'''
 		Some functions copy buffers of size specified by a size_t parameter.
 		If this isn't a constant, there's a chance that it can be manipulated 
@@ -632,7 +632,7 @@ class IDAnalyzer():
 		Example: void *memset( void *dest, int c, size_t count );
 		'''
 		
-		regexp = ".*memset.*|.*memcpy|.*memmove|.*strncpy|.*strcpyn.*|.*sncpy"
+		regexp = ".*memset.*|.*memcpy|.*memmove|.*strncpy|.*strcpy.*|.*sncpy"
 		candidate_dict = self._find_import_callers(regexp)
 		
 		for candidate_ea, imp_ea_list in candidate_dict.iteritems():
@@ -659,9 +659,12 @@ class IDAnalyzer():
 						if "push" in disasm:
 							tmp_push_list.append(instr) # address of the push instruction
 						elif instr in addr_list:
-							push_size_addr = tmp_push_list[-3]
-							if GetOpType(push_size_addr, 0) < 5: # This can be improved
-								print "[debug] %08x - %s" % (instr, GetDisasm(push_size_addr))
+							if len(tmp_push_list) >= 3: # sanity check :)
+								push_size_addr = tmp_push_list[-3]
+								if GetOpType(push_size_addr, 0) < 5: # This can be improved
+									print "[debug] %08x - %s" % (instr, GetDisasm(push_size_addr))
+									if mark == True:
+										SetColor(instr, CIC_ITEM, 0x2020c0)
 						else:
 							continue
 				
@@ -762,24 +765,41 @@ class IDAnalyzer():
 		importPattern = re.compile(regexp, re.IGNORECASE)
 		
 		for imp_name, idata_ea in self.import_dict.iteritems():
-			# This dict has the *IAT names* (i.e. __imp_ReadFile)
+			# This dict has the *IAT names* (i.e. __imp_ReadFile, within the .idata section)
 			if importPattern.match(imp_name):
-				for import_caller_addr in CodeRefsTo(idata_ea, True):
-					# Nasty trick to get the function's startEA
+				for import_caller in XrefsTo(idata_ea, True):
+					import_caller_addr = import_caller.frm
 					import_caller_fn = get_func(import_caller_addr)
-					import_caller_ea = import_caller_fn.startEA
 					
-					if importCallers.has_key(import_caller_ea):
-						# Remove nasty duplicates
-						if idata_ea in importCallers[import_caller_ea]:
-							continue
-						else:
-							importCallers[import_caller_ea].append(idata_ea)
+					# Check if caller is a THUNK
+					if import_caller_fn and (import_caller_fn.flags & idaapi.FUNC_THUNK) != 0:
+						# It IS a thunk
+						for thunk_caller in XrefsTo(import_caller_addr, True):
+							thunk_caller_fn = get_func(thunk_caller.frm)
+							import_caller_ea = thunk_caller_fn.startEA
+							if importCallers.has_key(import_caller_ea):
+								# Remove nasty duplicates
+								if idata_ea in importCallers[import_caller_ea]:
+									continue
+								else:
+									importCallers[import_caller_ea].append(idata_ea)
+							else:
+								importCallers[import_caller_ea] = [idata_ea]
+								
 					else:
-						importCallers[import_caller_ea] = [idata_ea]
+						# It is NOT a thunk, no need for recursion					
+						import_caller_ea = import_caller_fn.startEA
+						
+						if importCallers.has_key(import_caller_ea):
+							# Remove nasty duplicates
+							if idata_ea in importCallers[import_caller_ea]:
+								continue
+							else:
+								importCallers[import_caller_ea].append(idata_ea)
+						else:
+							importCallers[import_caller_ea] = [idata_ea]
 
-						
-						
+										
 		return importCallers
 		
 		
@@ -1095,6 +1115,8 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark immediate compares", "Ctrl+F10", 0, self.MarkImmCompares, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Locate allocs", "Ctrl+F11", 0, self.MilfLocateAllocs, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Locate network IO", "Ctrl+F12", 0, self.MilfLocateNetIO, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous size params", "", 0, self.MilfMarkDangerousSize, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Reset all markings", "", 0, self.MilfResetMarkings, ())
 
 	
 	def run(self, arg = 0):
@@ -1106,6 +1128,7 @@ class MilfPlugin(idaapi.plugin_t):
 		
 		# Some menus are in order!
 		self.AddMenuElements()
+	
 	
 	def MilfMarkDangerous(self):
 		self.ia.mark_dangerous()
@@ -1127,6 +1150,11 @@ class MilfPlugin(idaapi.plugin_t):
 	def MilfLocateNetIO(self):
 		self.ia.locate_net_io(interactive = True)
 		
+	def MilfResetMarkings(self):
+		self.ia.reset_colorize_graph('all')
+		
+	def MilfMarkDangerousSize(self):
+		self.ia.dangerous_size_param(mark = True)
 		
 	def term(self):
 		idaapi.msg("term() called\n")
