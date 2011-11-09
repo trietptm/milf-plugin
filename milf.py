@@ -598,33 +598,43 @@ class IDAnalyzer():
 	def locate_function_call(self, func_name, callee):
 		'''
 		Convenience function. It locates a particular function call *within a function*.
-		@todo: Modify for multiple occurrences of the call instruction within the same function.
 		
 		@type func_name: string
 		@param func_name: NAME of the function containing the call
 		
 		@type callee: string
-		@param callee: Name of the function being called
+		@param callee: NAME of the function being called
 		
 		@rtype: List
 		@return: List of addresses ("call callee" instructions)
 		'''
 		
-		call_addr = list()
-		func_ea = LocByName(func_name)	# start address
+		call_addr_list = list()
+		func_ea = LocByName(func_name)	# returns startEA
 		
+		# If there's a thunk, it won't be called directly from the function (dough!)
+		# Is the callee located inside .idata section and called through a thunk?
+		callee_ea = LocByName(callee)
+		xr = XrefsTo(callee_ea, True)
+		xrl = list(xr) # ugly but easy
+		if len(xrl) == 1:  # thunks are call bottlenecks
+			xrf = get_func(xrl[0].frm)
+			if (xrf.flags & idaapi.FUNC_THUNK) != 0:
+				# it IS a thunk
+				callee = GetFunctionName(xrl[0].frm)
+				
 		for instr in FuncItems(func_ea):
 			disasm = GetDisasm(instr)
 			if "call" in disasm and callee in disasm:
-				call_addr.append(instr)
-				#if self.debug:
-					#print "[debug] Found", disasm, "at %08x" % instr
+				call_addr_list.append(instr)
+				if self.debug:
+					print "[debug] Found", disasm, "at %08x" % instr
 		
-		return call_addr
+		return call_addr_list
 		
 	
 	
-	def dangerous_size_param(self, mark = False):
+	def dangerous_size_param(self, color = 0xFF8000, mark = False):
 		'''
 		Some functions copy buffers of size specified by a size_t parameter.
 		If this isn't a constant, there's a chance that it can be manipulated 
@@ -632,22 +642,22 @@ class IDAnalyzer():
 		Example: void *memset( void *dest, int c, size_t count );
 		'''
 		
-		regexp = ".*memset.*|.*memcpy|.*memmove|.*strncpy|.*strcpy.*|.*sncpy"
+		regexp = ".*memset|.*memcpy|.*memmove|.*strncpy|.*strcpy.*|.*sncpy"
 		candidate_dict = self._find_import_callers(regexp)
 		
 		for candidate_ea, imp_ea_list in candidate_dict.iteritems():
 			# For every candidate function, look for the calls 
 			# to dangerous functions within it
 			for danger_ea in imp_ea_list:
-				func_name = GetFunctionName(candidate_ea)
-				callee = GetFunctionName(danger_ea)
-				# List of addresses within the function ("call dangerous func")
-				addr_list = self.locate_function_call(func_name, callee)
+				func_caller = GetFunctionName(candidate_ea)
+				imp_callee = Name(danger_ea)
+				# List of addresses within the function ("call dangerous_func")
+				addr_list = self.locate_function_call(func_caller, imp_callee)
 			
 				if addr_list:
-					print "------ Analysing %s ------" % func_name
+					print "------ Analysing %s ------" % func_caller
 					tmp_push_list = list()
-					func_start = LocByName(func_name)
+					func_start = LocByName(func_caller)
 					func_end = FindFuncEnd(func_start)
 					# if the function end isn't defined (probably a library call) then skip it
 					if func_end == 0xFFFFFFFF:
@@ -756,8 +766,8 @@ class IDAnalyzer():
 		
 		@attention: There are imports called through a thunk and directly.
 		@rtype: Dictionary (of lists)
-		@return: Dictionary containing *the address within the functions* 
-				 calling the imports (ex. "call memcpy"),
+		@return: Dictionary containing *the address of the functions* 
+				 calling the imports,
 				 {fn_call_ea: [idata1_ea, idata2_ea, ...], ...}
 		'''
 		
