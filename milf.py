@@ -1120,6 +1120,7 @@ class MilfPlugin(idaapi.plugin_t):
 	def AddMenuElements(self):
 		'''Menus are better than no GUI at all *sigh*'''
 		
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Most referenced functions", "", 0, self.MilfMostReferenced, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Connect Graph", "Ctrl+F8", 0, self.MilfConnGraph, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous functions", "Ctrl+F9", 0, self.MilfMarkDangerous, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark immediate compares", "Ctrl+F10", 0, self.MarkImmCompares, ())
@@ -1140,6 +1141,20 @@ class MilfPlugin(idaapi.plugin_t):
 		self.AddMenuElements()
 	
 	
+	def MilfMostReferenced(self, number = 10):
+		''' Identifying these is an important first step '''
+		self.number = number
+		referenceDict = dict()
+		
+		for funcAddr in Functions():
+			refNumber = sum(1 for e in XrefsTo(funcAddr, True)) # stackoverflow ;)
+			referenceDict[funcAddr] = refNumber
+		
+		# Let's order this stuff nicely
+		for func_ea, refnumber in sorted(referenceDict.iteritems(), reverse = True, key = lambda (k, v): (v, k)):
+			print "%s : %s" % (GetFunctionName(func_ea), refnumber)
+
+		
 	def MilfMarkDangerous(self):
 		self.ia.mark_dangerous()
 	
