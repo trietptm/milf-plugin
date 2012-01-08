@@ -1131,7 +1131,8 @@ class MilfPlugin(idaapi.plugin_t):
 
 	
 	def run(self, arg = 0):
-		idaapi.msg("plugin_t run() called\n")
+		idaapi.msg("[debug] MILF's plugin_t run() called\n")
+		idaapi.msg("You can start using MILF right now.\n")
 		# Load icon from file (convenient but not portable :/)
 		self.icon_id = idaapi.load_custom_icon(file_name = "M.ico")
 		if self.icon_id == 0:
@@ -1150,10 +1151,17 @@ class MilfPlugin(idaapi.plugin_t):
 			refNumber = sum(1 for e in XrefsTo(funcAddr, True)) # stackoverflow ;)
 			referenceDict[funcAddr] = refNumber
 		
+		print "Top %d most referenced functions" % self.number
+		
+		NrResults = 0
 		# Let's order this stuff nicely
 		for func_ea, refnumber in sorted(referenceDict.iteritems(), reverse = True, key = lambda (k, v): (v, k)):
-			print "%s : %s" % (GetFunctionName(func_ea), refnumber)
-
+			NrResults += 1 # control counter
+			if NrResults > self.number:
+				break
+			else:
+				print "%s : %s" % (GetFunctionName(func_ea), refnumber)
+		
 		
 	def MilfMarkDangerous(self):
 		self.ia.mark_dangerous()
