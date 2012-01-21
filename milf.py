@@ -758,6 +758,45 @@ class IDAnalyzer():
 		
 		return callerDict
 
+
+	def locate_most_referenced(self, number = 10, interactive = False):
+		''' Identifying these is an important first step '''
+		self.number = number
+		self.interactive = interactive
+		referenceDict = dict()
+		topReferencesDict = dict()
+		
+		for funcAddr in Functions():
+			refNumber = sum(1 for e in XrefsTo(funcAddr, True)) # stackoverflow ;)
+			referenceDict[funcAddr] = refNumber
+		
+		# Log to IDA's output window and to a custom viewer <3
+		print "Top %d most referenced functions" % self.number
+		
+		NrResults = 0
+		# Let's order this stuff nicely
+		for func_ea, refnumber in sorted(referenceDict.iteritems(), reverse = True, key = lambda (k, v): (v, k)):
+			NrResults += 1 # control counter
+			if NrResults > self.number:
+				break
+			else:
+				print "%s : %s" % (GetFunctionName(func_ea), refnumber)
+				topReferencesDict[func_ea] = refnumber
+				
+		# Create the custom viewer
+		if self.interactive:
+			toprefs_cview = SuspiciousFuncsViewer()
+			if toprefs_cview.Create("Top referenced", topReferencesDict):
+				toprefs_cview.Show()
+			else:
+				print "[debug] Failed to create custom view: Top referenced"
+				
+				
+		return topReferencesDict
+		
+
+
+
 		
 	def _find_import_callers(self, regexp):
 		'''
@@ -781,12 +820,27 @@ class IDAnalyzer():
 					import_caller_addr = import_caller.frm
 					import_caller_fn = get_func(import_caller_addr)
 					
-					# Check if caller is a THUNK
-					if import_caller_fn and (import_caller_fn.flags & idaapi.FUNC_THUNK) != 0:
-						# It IS a thunk
-						for thunk_caller in XrefsTo(import_caller_addr, True):
-							thunk_caller_fn = get_func(thunk_caller.frm)
-							import_caller_ea = thunk_caller_fn.startEA
+					if import_caller_fn:
+						
+						# Check if caller is a THUNK
+						if (import_caller_fn.flags & idaapi.FUNC_THUNK) != 0:
+							# It IS a thunk
+							for thunk_caller in XrefsTo(import_caller_addr, True):
+								thunk_caller_fn = get_func(thunk_caller.frm)
+								import_caller_ea = thunk_caller_fn.startEA
+								if importCallers.has_key(import_caller_ea):
+									# Remove nasty duplicates
+									if idata_ea in importCallers[import_caller_ea]:
+										continue
+									else:
+										importCallers[import_caller_ea].append(idata_ea)
+								else:
+									importCallers[import_caller_ea] = [idata_ea]
+									
+						else:
+							# It is NOT a thunk, no need for recursion					
+							import_caller_ea = import_caller_fn.startEA
+							
 							if importCallers.has_key(import_caller_ea):
 								# Remove nasty duplicates
 								if idata_ea in importCallers[import_caller_ea]:
@@ -795,21 +849,12 @@ class IDAnalyzer():
 									importCallers[import_caller_ea].append(idata_ea)
 							else:
 								importCallers[import_caller_ea] = [idata_ea]
-								
-					else:
-						# It is NOT a thunk, no need for recursion					
-						import_caller_ea = import_caller_fn.startEA
-						
-						if importCallers.has_key(import_caller_ea):
-							# Remove nasty duplicates
-							if idata_ea in importCallers[import_caller_ea]:
-								continue
-							else:
-								importCallers[import_caller_ea].append(idata_ea)
-						else:
-							importCallers[import_caller_ea] = [idata_ea]
 
-										
+					else:
+						#import_caller_fn is None
+						pass
+					
+					
 		return importCallers
 		
 		
@@ -1059,11 +1104,14 @@ class SuspiciousFuncsViewer(simplecustviewer_t):
 		if lineno < 2:
 			return False
 		
-		called_list = self.dict_refs[lineno][1]
-		hint_string = "It calls: "
-		for c in called_list:
-			hint_string += "%s, " % Name(c)
-			
+		OnHintParameter = self.dict_refs[lineno][1]
+		if type(OnHintParameter) == list:
+			hint_string = "It calls: "
+			for c in OnHintParameter:
+				hint_string += "%s, " % Name(c)
+		else:
+			hint_string = "%s" % OnHintParameter#
+				
 		color_hint = idaapi.COLSTR(hint_string, idaapi.SCOLOR_STRING)	
 		return (1, color_hint)
 	
@@ -1143,24 +1191,7 @@ class MilfPlugin(idaapi.plugin_t):
 	
 	
 	def MilfMostReferenced(self, number = 10):
-		''' Identifying these is an important first step '''
-		self.number = number
-		referenceDict = dict()
-		
-		for funcAddr in Functions():
-			refNumber = sum(1 for e in XrefsTo(funcAddr, True)) # stackoverflow ;)
-			referenceDict[funcAddr] = refNumber
-		
-		print "Top %d most referenced functions" % self.number
-		
-		NrResults = 0
-		# Let's order this stuff nicely
-		for func_ea, refnumber in sorted(referenceDict.iteritems(), reverse = True, key = lambda (k, v): (v, k)):
-			NrResults += 1 # control counter
-			if NrResults > self.number:
-				break
-			else:
-				print "%s : %s" % (GetFunctionName(func_ea), refnumber)
+		self.ia.locate_most_referenced(number = 10, interactive = True)
 		
 		
 	def MilfMarkDangerous(self):
