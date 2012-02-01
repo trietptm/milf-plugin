@@ -544,10 +544,114 @@ class IDAnalyzer():
 					
 		return True
 	
+	
+	def function_bb_connect(self, bb_src_ea, bb_dst_ea, color = 0x2020c0):
+		'''
+		Graphically connect (color) basic blocks within a function.
+		It could save your life! :)
+		'''
+		set_down = set([])
+		set_up = set([])
+		self.color = color
+		
+		
+		# Nasty trick to get function's start EA
+		f = get_func(bb_src_ea) # func_t object
+		
+		
+		# Calculate the downgraph (originating at bb_src_ea)
+		set_down = self._aux_calc_down_set(f, [bb_src_ea])
+			
+		# Calculate the upgraph set (originating at bb_dst_ea)
+		set_up = self._aux_calc_up_set(f, [bb_dst_ea])
+		
+		ConnectedPaths = set_down.intersection(set_up)
+		
+		if ConnectedPaths:
+			for PathBlock in ConnectedPaths:
+				SetColor(PathBlock, CIC_ITEM, self.color)
+		else:
+			print "[debug] No path connecting those two basic blocks :("
+
+
+	def _aux_calc_down_set(self, f, CurrentBlockLayer, DownGraphBlockSet = set([])):
+		'''
+		Analogous to *graph_down()*.
+		To set the "root" block, call with CurrentBlockLayer = [bb_src_ea] 
+		
+		@rtype: set
+		@return: set containing upgraph blocks
+		'''
+		self.FuncFlowChart = FlowChart(f)
+		self.CurrentBlockLayer = CurrentBlockLayer
+		self.NextBlockLayer = list()
+		
+		# Iterate through all basic blocks and get the egress connections.
+		for bb in self.CurrentBlockLayer:					# bb: address
+			block = self._aux_lookup_ea_bb(f, bb)
+			for enode in block.succs():						# enode: basic block type
+				if enode.startEA not in DownGraphBlockSet:	# Eliminates recursions
+					self.NextBlockLayer.append(enode.startEA)
+					DownGraphBlockSet.add(enode.startEA)
+					self._aux_calc_down_set(f, self.NextBlockLayer, DownGraphBlockSet)
+				
+		return DownGraphBlockSet
+		
+		
+	def _aux_lookup_ea_bb(self, f, ea):
+		'''
+		Returns a basic block object given an address
+		
+		@type f: func_t object
+		@param f: represents the function of interest
+		
+		@type ea: address
+		@param ea: address of the basic block
+		
+		@rtype: Basic Block Object
+		@return: well... a basic block object :)    
+		'''
+		self.f = f
+		self.ea = ea
+		self.FlowChart = FlowChart(f)
+		
+		for bb in self.FlowChart:
+			if bb.startEA == self.ea:
+				return bb
+			
+		return False
+		
+		
+		
+		
+	def _aux_calc_up_set(self, f, CurrentBlockLayer, UpGraphBlockSet = set([])):
+		'''
+		Auxiliary function. I couldn't make Basic Block preds() work,
+		so I need to calculate the upgraph myself.
+		Note: preds(), I kill you! :)
+		'''
+		self.FuncFlowChart = FlowChart(f)
+		self.CurrentBlockLayer = CurrentBlockLayer
+		self.NextBlockLayer = list()
+		
+		
+		for block in self.FuncFlowChart: # full lookup (it could be enhanced)
+			for bsuccs in block.succs():	# .succs() returns a generator
+				if bsuccs.startEA in CurrentBlockLayer: # it's a parent
+					if block.startEA not in UpGraphBlockSet:
+						self.NextBlockLayer.append(block.startEA)
+						UpGraphBlockSet.add(block.startEA)
+						self._aux_calc_up_set(f, self.NextBlockLayer, UpGraphBlockSet)
+		
+		return UpGraphBlockSet
+		
+		
+		
+		
 					
 	def function_graph(self, ea):
 		'''
-		Wrapper for internal method _function_graph()
+		It creates a graph of nodes and their children.
 		
 		@type ea: address
 		@param ea: address anywhere within the analyzed function.
@@ -559,41 +663,13 @@ class IDAnalyzer():
 		f = FlowChart(get_func(ea))	#FlowChart object
 		
 		for bb in f:
-			bb_dict[bb.startEA] = bb		# Dict of BasicBlock objects
-			
-		fgraph = self._function_graph(ea, bb_dict)
+			bb_dict[bb.startEA] = list()		# Dict of BasicBlock objects
+			for child in bb.succs():
+				bb_dict[bb.startEA].append(child.startEA)
 		
-		return fgraph
-		
+		return bb_dict
 	
-	def _function_graph(self, ea, bb_dict, bb_graph = {}, path = set([])):
-		'''
-		Analogous to graph_down(). Creates a dictionary of basic blocks 
-		within a function and the egress connections between them.
-		It will be used to find the compares that lead to a function call (bb)
-		
-		@type ea: address
-		@param ea: address anywhere within the analyzed function.
-		
-		@type bb_dict: dictionary
-		@param bb_dict: dictionary to hold the basic blocks info
-		
-		@rtype: dictionary
-		@return: dictionary { block_ea: [branch1_ea, branch2_ea], ... }
-		'''
-		bb_graph[ea] = list()	# New entry on the dictionary {ea: [branch1, branch2], ...}
-		path.add(ea)
-		
-		# Iterate through all basic blocks and get the egress connections.
-		block = bb_dict[ea]
-		for enode in block.succs():			# enode, block: BasicBlock objects
-			if enode.startEA not in path:	# Eliminates recursions
-				bb_graph[ea].append(enode.startEA)
-				self._function_graph(enode.startEA, bb_dict, bb_graph, path)
-				
-				
-		return bb_graph
-	
+
 	
 	def locate_function_call(self, func_name, callee):
 		'''
@@ -1168,6 +1244,9 @@ class MilfPlugin(idaapi.plugin_t):
 	def AddMenuElements(self):
 		'''Menus are better than no GUI at all *sigh*'''
 		
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Select Origin Basic Block", "", 0, self.MilfMarkOriginBB, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Select Destination Basic Block", "", 0, self.MilfMarkDestBB, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Connect Blocks!", "", 0, self.MilfConnectBlocks, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Most referenced functions", "", 0, self.MilfMostReferenced, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Connect Graph", "Ctrl+F8", 0, self.MilfConnGraph, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous functions", "Ctrl+F9", 0, self.MilfMarkDangerous, ())
@@ -1190,6 +1269,28 @@ class MilfPlugin(idaapi.plugin_t):
 		self.AddMenuElements()
 	
 	
+	def MilfMarkOriginBB(self):
+		self.src_basic_block = ScreenEA()
+		print "[Debug] Selected Origin Basic Block (0x%08x)" % self.src_basic_block
+		
+		return True
+		
+	
+	def MilfMarkDestBB(self):
+		self.dst_basic_block = ScreenEA()
+		print "[Debug] Selected Destination Basic Block (0x%08x)" % self.dst_basic_block
+		
+		return True
+	
+	def MilfConnectBlocks(self):
+		if self.src_basic_block and self.dst_basic_block:
+			self.ia.function_bb_connect(self.src_basic_block, self.dst_basic_block)
+			print "[Debug] Drawing connect graph..."
+		else:
+			print "[Debug] Check that you selected all parameters"
+		
+		return True
+		
 	def MilfMostReferenced(self, number = 10):
 		self.ia.locate_most_referenced(number = 10, interactive = True)
 		
