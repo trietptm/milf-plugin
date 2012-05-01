@@ -932,7 +932,35 @@ class IDAnalyzer():
 					
 					
 		return importCallers
+
+
+
+	def export_functions_to_disk(self):
+		'''
+		Export all the function start addresses to a file.
+		This will be used by a tracer.
+		'''
 		
+		self.path = "c:\Users\carlos\Desktop\\"  # quick n dirty
+		self.filename = "ida_functions.txt"
+		
+		self.f = open(self.path + self.filename, "w")
+		print "Exporting function start addresses to file\n"
+		
+		self.idx = 0
+		
+		TextSegStart = SegByName('.text')
+		for function in Functions(TextSegStart, SegEnd(TextSegStart)):
+			self.f.write(str(hex(function)) + '\n')
+			self.idx += 1
+			
+		self.f.close()
+		
+		print "%d functions written to disk" % self.idx
+			
+	
+	
+			
 		
 	def usage(self):
 		'''On screen help'''
@@ -1255,6 +1283,7 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Locate network IO", "Ctrl+F12", 0, self.MilfLocateNetIO, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous size params", "", 0, self.MilfMarkDangerousSize, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Reset all markings", "", 0, self.MilfResetMarkings, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Export function addresses to disk", "", 0, self.MilfExportFunctions, ())
 
 	
 	def run(self, arg = 0):
@@ -1320,6 +1349,10 @@ class MilfPlugin(idaapi.plugin_t):
 		
 	def MilfMarkDangerousSize(self):
 		self.ia.dangerous_size_param(mark = True)
+		
+	def MilfExportFunctions(self):
+		self.ia.export_functions_to_disk()
+	
 		
 	def term(self):
 		idaapi.msg("term() called\n")
