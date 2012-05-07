@@ -935,13 +935,13 @@ class IDAnalyzer():
 
 
 
-	def export_functions_to_disk(self):
+	def export_functions_to_file(self):
 		'''
 		Export all the function start addresses to a file.
 		This will be used by a tracer.
 		'''
 		
-		self.path = "c:\Users\carlos\Desktop\\"  # quick n dirty
+		self.path = "c:\Documents and Settings\carlos\Desktop\\"  # quick n dirty
 		self.filename = "ida_functions.txt"
 		
 		self.f = open(self.path + self.filename, "w")
@@ -958,9 +958,31 @@ class IDAnalyzer():
 		
 		print "%d functions written to disk" % self.idx
 			
+
+
+	def import_functions_from_file(self):
+		'''
+		Import all the function start addresses to a file.
+		Rudimentary differential debugging, yay!
+		'''	
+		
+		self.filepath = "c:\Documents and Settings\carlos\Desktop\specific_functions.txt"
+		print "Importing function start addresses from file\n"
+		
+		self.idx = 0		
+		self.f = open(self.filepath, "r")
+		self.function_addresses = self.f.readlines()  # I still have to strip them
+		self.f.close()
+		
+				
+		for fa in self.function_addresses:
+			f_addr = int(fa.strip(), 16)
+			SetColor(f_addr, CIC_FUNC, 0x188632)
+			self.idx += 1
+		
+		print "%d functions imported from file" % self.idx
 	
 	
-			
 		
 	def usage(self):
 		'''On screen help'''
@@ -977,7 +999,8 @@ class IDAnalyzer():
 		for m in methods:
 			print "- ia." + m
 		
-
+       
+       
 ###################################################################################################
 class ConnectGraph(GraphViewer):
 	
@@ -1284,6 +1307,7 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous size params", "", 0, self.MilfMarkDangerousSize, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Reset all markings", "", 0, self.MilfResetMarkings, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Export function addresses to disk", "", 0, self.MilfExportFunctions, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Import function addresses from file", "", 0, self.MilfImportFunctions, ())
 
 	
 	def run(self, arg = 0):
@@ -1351,7 +1375,11 @@ class MilfPlugin(idaapi.plugin_t):
 		self.ia.dangerous_size_param(mark = True)
 		
 	def MilfExportFunctions(self):
-		self.ia.export_functions_to_disk()
+		self.ia.export_functions_to_file()
+		
+	def MilfImportFunctions(self):
+		self.ia.import_functions_from_file()
+	
 	
 		
 	def term(self):
