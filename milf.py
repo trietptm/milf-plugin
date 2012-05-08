@@ -941,22 +941,22 @@ class IDAnalyzer():
 		This will be used by a tracer.
 		'''
 		
-		self.path = "c:\Documents and Settings\carlos\Desktop\\"  # quick n dirty
-		self.filename = "ida_functions.txt"
+		path = "c:\Documents and Settings\carlos\Desktop\\"  # quick n dirty
+		filename = "ida_functions.txt"
 		
-		self.f = open(self.path + self.filename, "w")
+		f = open(path + filename, "w")
 		print "Exporting function start addresses to file\n"
 		
-		self.idx = 0
+		idx = 0
 		
 		TextSegStart = SegByName('.text')
 		for function in Functions(TextSegStart, SegEnd(TextSegStart)):
-			self.f.write(str(hex(function)) + '\n')
-			self.idx += 1
+			f.write(str(hex(function)) + '\n')
+			idx += 1
 			
-		self.f.close()
+		f.close()
 		
-		print "%d functions written to disk" % self.idx
+		print "%d functions written to disk" % idx
 			
 
 
@@ -966,21 +966,31 @@ class IDAnalyzer():
 		Rudimentary differential debugging, yay!
 		'''	
 		
-		self.filepath = "c:\Documents and Settings\carlos\Desktop\specific_functions.txt"
+		filepath = "c:\Documents and Settings\carlos\Desktop\specific_functions.txt"
 		print "Importing function start addresses from file\n"
 		
-		self.idx = 0		
-		self.f = open(self.filepath, "r")
-		self.function_addresses = self.f.readlines()  # I still have to strip them
-		self.f.close()
+		idx = 0		
+		f = open(filepath, "r")
+		function_addresses = f.readlines()  # I still have to strip them
+		f.close()
 		
+		imported_fn_dict = dict()
 				
-		for fa in self.function_addresses:
+		for fa in function_addresses:
 			f_addr = int(fa.strip(), 16)
+			imported_fn_dict[f_addr] = GetFunctionName(f_addr)
 			SetColor(f_addr, CIC_FUNC, 0x188632)
-			self.idx += 1
+			idx += 1
 		
-		print "%d functions imported from file" % self.idx
+		print "[debug] %d functions imported from file" % idx
+		
+		# A custom viewer doesn't hurt :)
+		imported_fn_cview = SuspiciousFuncsViewer()
+		if imported_fn_cview.Create("Specific Functions", imported_fn_dict, onhint_active = False):					
+			imported_fn_cview.Show()
+		else:
+			print "[debug] Failed to create custom view: Specific Functions" 
+		
 	
 	
 		
@@ -1132,7 +1142,7 @@ class ConnectGraph(GraphViewer):
 ###################################################################################################
 class SuspiciousFuncsViewer(simplecustviewer_t):
 	
-	def Create(self, sn = None, dict_fn = None):
+	def Create(self, sn = None, dict_fn = None, onhint_active = True):
 		'''
 		This is analog to the __init__ method when superclassing.
 		
@@ -1141,6 +1151,8 @@ class SuspiciousFuncsViewer(simplecustviewer_t):
 		'''
 		
 		self.dict_fn = dict_fn
+		self.onhint_active = onhint_active
+		
 		
 		title = "Hot spots"
 		if sn:
@@ -1228,6 +1240,10 @@ class SuspiciousFuncsViewer(simplecustviewer_t):
 		return True
 	
 	def OnHint(self, lineno):
+		
+		if not self.onhint_active:
+			pass
+		
 		if lineno < 2:
 			return False
 		
