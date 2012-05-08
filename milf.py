@@ -949,9 +949,14 @@ class IDAnalyzer():
 		
 		idx = 0
 		
+		# The string format is:
+		# 0xAAAAAAAA-0xBBBBBBBB {ea_start, ea_end}
+		
 		TextSegStart = SegByName('.text')
 		for function in Functions(TextSegStart, SegEnd(TextSegStart)):
-			f.write(str(hex(function)) + '\n')
+			function_end = FindFuncEnd(function)  # if FAIL 0xFFFFFFFF
+			addr_interval_string = str(hex(function)) + '-' + str(hex(function_end))
+			f.write(addr_interval_string  + '\n')
 			idx += 1
 			
 		f.close()
@@ -977,7 +982,7 @@ class IDAnalyzer():
 		imported_fn_dict = dict()
 				
 		for fa in function_addresses:
-			f_addr = int(fa.strip(), 16)
+			f_addr = int(fa.split('-')[0], 16)
 			imported_fn_dict[f_addr] = GetFunctionName(f_addr)
 			SetColor(f_addr, CIC_FUNC, 0x188632)
 			idx += 1
