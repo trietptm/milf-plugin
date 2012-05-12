@@ -941,11 +941,10 @@ class IDAnalyzer():
 		This will be used by a tracer.
 		'''
 		
-		path = "c:\Documents and Settings\carlos\Desktop\\"  # quick n dirty
-		filename = "ida_functions.txt"
+		filename = idc.AskFile(1, "*.*", "File to export functions to?")
 		
-		f = open(path + filename, "w")
-		print "Exporting function start addresses to file\n"
+		f = open(filename, "w")
+		print "Exporting function addresses to %s\n" % filename
 		
 		idx = 0
 		
@@ -971,11 +970,11 @@ class IDAnalyzer():
 		Rudimentary differential debugging, yay!
 		'''	
 		
-		filepath = "c:\Documents and Settings\carlos\Desktop\specific_functions.txt"
-		print "Importing function start addresses from file\n"
+		filename = idc.AskFile(0, "*.*", "File to import functions from?")
+		print "Importing function start addresses from %s\n" % filename
 		
 		idx = 0		
-		f = open(filepath, "r")
+		f = open(filename, 'r')
 		function_addresses = f.readlines()  # I still have to strip them
 		f.close()
 		
