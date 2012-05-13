@@ -952,9 +952,10 @@ class IDAnalyzer():
 		# 0xAAAAAAAA-0xBBBBBBBB {ea_start, ea_end}
 		
 		TextSegStart = SegByName('.text')
-		for function in Functions(TextSegStart, SegEnd(TextSegStart)):
-			function_end = FindFuncEnd(function)  # if FAIL 0xFFFFFFFF
-			addr_interval_string = str(hex(function)) + '-' + str(hex(function_end))
+		for function_start in Functions(TextSegStart, SegEnd(TextSegStart)):
+			function_end = FindFuncEnd(function_start)  # if FAIL 0xFFFFFFFF
+			# Below I've just stripped the leading '0x' chars
+			addr_interval_string = str(hex(function_start)).split('0x')[1] + '-' + str(hex(function_end)).split('0x')[1]
 			f.write(addr_interval_string  + '\n')
 			idx += 1
 			
