@@ -997,7 +997,37 @@ class IDAnalyzer():
 			print "[debug] Failed to create custom view: Specific Functions" 
 		
 	
-	
+
+	def import_basic_blocks_from_file(self):
+		'''
+		Import hit basic blocks from a detailed PIN Trace.
+		A choser allows to somehow re-trace execution within 
+		the functions we are interested in.
+		'''	
+		
+		filename = idc.AskFile(0, "*.*", "File to import basic blocks from?")
+		print "Importing basic block addresses from %s\n" % filename
+		
+		token = '$'
+		idx = 0
+				
+		f = open(filename, 'r')
+		lines = f.readlines()
+		f.close()
+
+		bb_addresses = list()
+		
+		for li in lines:
+			if token in li:
+				bb_addresses.append(int(li.split(token)[1].strip(), 16))
+				
+		
+		# Love lambda functions :)
+		TraceElements = [[hex(x), idc.GetDisasm(x)] for x in bb_addresses]
+		MilfBBTraceSelector("Basic blocks hit during Intel's PIN trace", TraceElements, 0, parent = self).show()
+			
+		
+
 		
 	def usage(self):
 		'''On screen help'''
@@ -1329,6 +1359,7 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Reset all markings", "", 0, self.MilfResetMarkings, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Export function addresses to disk", "", 0, self.MilfExportFunctions, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Import function addresses from file", "", 0, self.MilfImportFunctions, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Import basic blocks from file", "", 0, self.MilfImportBasicBlocks, ())
 
 	
 	def run(self, arg = 0):
@@ -1400,6 +1431,9 @@ class MilfPlugin(idaapi.plugin_t):
 		
 	def MilfImportFunctions(self):
 		self.ia.import_functions_from_file()
+		
+	def MilfImportBasicBlocks(self):
+		self.ia.import_basic_blocks_from_file()
 	
 	
 		
@@ -1503,7 +1537,7 @@ class MilfFuncSelector(Choose2):
 	def OnGetSize(self):
 		return len(self.items)
 	
-	def OnSelectedLine(self, n):
+	def OnSelectLine(self, n):
 		# Callback for double-clicks
 		pass
 	
@@ -1540,6 +1574,60 @@ class MilfFuncSelector(Choose2):
 			self.cmd_origin = self.AddCommand("Set as origin")
 			self.cmd_dst = self.AddCommand("Set as destination")
 			self.cmd_graph = self.AddCommand("Graph it")
+			return True
+
+
+###################################################################################################
+class MilfBBTraceSelector(Choose2):
+	'''
+	Displays the basic blocks hit during the Intel's PIN detailed trace.
+	'''
+	
+	def __init__(self, title, items, icon, parent, embedded = False):
+		Choose2.__init__(self, title, [["Address", 8], ["Disassembly", 20]], embedded = embedded)
+		self.items = items
+		self.icon = icon
+		
+	def GetItems(self):
+		return self.items
+	
+	def SetItems(self, items):
+		self.items = [] if items is None else items
+		
+	def OnClose(self):
+		pass
+	
+	def OnGetLine(self, n):
+		return self.items[n]
+	
+	def OnGetSize(self):
+		return len(self.items)
+	
+	def OnSelectLine(self, n):
+		'''Callback for: double-click'''
+		trace_addr = int(self.items[n][0], 16)
+		idc.SetColor(trace_addr, CIC_ITEM, 0x3db43d)
+		idc.Jump(trace_addr)
+	
+	def OnCommand(self, n, cmd_id):
+		'''Callback for: contextual menu'''
+		if cmd_id == self.cmd_follow:
+			# jmp to position in graph view
+			idc.Jump(int(self.items[n][0], 16))
+		else:
+			print "[debug] Command not understood"
+		
+		return True
+	
+	
+	def show(self):
+		'''It replaces the native Show() method'''
+		t = self.Show()
+		if t < 0:
+			return False
+		else:
+			# Add some context menus :)
+			self.cmd_follow = self.AddCommand("Follow in graph")
 			return True
 		
 		
