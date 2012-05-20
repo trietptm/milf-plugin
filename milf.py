@@ -1023,7 +1023,7 @@ class IDAnalyzer():
 				
 		
 		# Love lambda functions :)
-		TraceElements = [[hex(x), idc.GetDisasm(x)] for x in bb_addresses]
+		TraceElements = [[GetFunctionName(x), hex(x), idc.GetDisasm(x)] for x in bb_addresses]
 		MilfBBTraceSelector("Basic blocks hit during Intel's PIN trace", TraceElements, 0, parent = self).show()
 			
 		
@@ -1584,7 +1584,7 @@ class MilfBBTraceSelector(Choose2):
 	'''
 	
 	def __init__(self, title, items, icon, parent, embedded = False):
-		Choose2.__init__(self, title, [["Address", 8], ["Disassembly", 20]], embedded = embedded)
+		Choose2.__init__(self, title, [["Function", 20], ["Address", 8], ["Disassembly", 20]], embedded = embedded)
 		self.items = items
 		self.icon = icon
 		
