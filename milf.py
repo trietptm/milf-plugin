@@ -1605,7 +1605,7 @@ class MilfBBTraceSelector(Choose2):
 	
 	def OnSelectLine(self, n):
 		'''Callback for: double-click'''
-		trace_addr = int(self.items[n][0], 16)
+		trace_addr = int(self.items[n][1], 16)
 		idc.SetColor(trace_addr, CIC_ITEM, 0x3db43d)
 		idc.Jump(trace_addr)
 	
@@ -1613,7 +1613,7 @@ class MilfBBTraceSelector(Choose2):
 		'''Callback for: contextual menu'''
 		if cmd_id == self.cmd_follow:
 			# jmp to position in graph view
-			idc.Jump(int(self.items[n][0], 16))
+			idc.Jump(int(self.items[n][1], 16))
 		else:
 			print "[debug] Command not understood"
 		
