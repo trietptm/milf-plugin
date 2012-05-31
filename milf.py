@@ -935,12 +935,13 @@ class IDAnalyzer():
 
 
 
-	def export_functions_to_file(self):
+	def export_functions_to_file(self, extended = False):
 		'''
-		Export all the function start addresses to a file.
-		This will be used by a tracer.
+		Export all the function start addresses to a file. This will be used by a tracer.
+		The extended option logs the number of arguments as well.
 		'''
 		
+		self.extended = extended
 		filename = idc.AskFile(1, "*.*", "File to export functions to?")
 		
 		f = open(filename, "w")
@@ -951,11 +952,21 @@ class IDAnalyzer():
 		# The string format is:
 		# 0xAAAAAAAA-0xBBBBBBBB {ea_start, ea_end}
 		
-		TextSegStart = SegByName('.text')
-		for function_start in Functions(TextSegStart, SegEnd(TextSegStart)):
-			function_end = FindFuncEnd(function_start)  # if FAIL 0xFFFFFFFF
+		for function_start in Functions():
+			function_end = GetFunctionAttr(function_start, FUNCATTR_END)
 			# Below I've just stripped the leading '0x' chars
 			addr_interval_string = str(hex(function_start)).split('0x')[1] + '-' + str(hex(function_end)).split('0x')[1]
+			
+			if self.extended:
+				# Get the number of function args
+				frame = GetFrame(f)
+				if frame is None: continue
+				ret = GetMemberOffset(frame, " r")
+				if ret == -1: continue
+				firstArg = ret + 4
+				NumberOfArguments = (GetStrucSize(frame) - firstArg)/4 	# Every arg on the stack is 4 bytes long
+				addr_interval_string += ",%d" % NumberOfArguments 
+
 			f.write(addr_interval_string  + '\n')
 			idx += 1
 			
@@ -1358,6 +1369,7 @@ class MilfPlugin(idaapi.plugin_t):
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Mark dangerous size params", "", 0, self.MilfMarkDangerousSize, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Reset all markings", "", 0, self.MilfResetMarkings, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Export function addresses to disk", "", 0, self.MilfExportFunctions, ())
+		idaapi.add_menu_item("Edit/Plugins/", "MILF: Export function addresses (and arguments info) to disk", "", 0, self.MilfExportFunctionsAdvanced, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Import function addresses from file", "", 0, self.MilfImportFunctions, ())
 		idaapi.add_menu_item("Edit/Plugins/", "MILF: Import basic blocks from file", "", 0, self.MilfImportBasicBlocks, ())
 
@@ -1428,6 +1440,9 @@ class MilfPlugin(idaapi.plugin_t):
 		
 	def MilfExportFunctions(self):
 		self.ia.export_functions_to_file()
+
+	def MilfExportFunctionsAdvanced(self):
+		self.ia.export_functions_to_file(extended = True)
 		
 	def MilfImportFunctions(self):
 		self.ia.import_functions_from_file()
