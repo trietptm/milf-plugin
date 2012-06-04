@@ -1032,6 +1032,8 @@ class IDAnalyzer():
 			if token in li:
 				bb_addresses.append(int(li.split(token)[1].strip(), 16))
 				
+		# Process the list for loops
+		analyzed_trace = self._find_trace_loops(bb_addresses)
 		
 		# Love lambda functions :)
 		TraceElements = [[GetFunctionName(x), hex(x), idc.GetDisasm(x)] for x in bb_addresses]
@@ -1039,6 +1041,40 @@ class IDAnalyzer():
 			
 		
 
+	def _find_trace_loops(self, bb_addr):
+		'''
+		Simple algorithm to reduce small loops in trace files.
+		Loops of the type a -> b -> a ... are identified.
+		@return: two-dimensional list (int addr, str comment), where the comment 
+				 indicate the number of times the loop occurred or empty string if none.
+		'''
+		
+		idx 	= 0
+		loop 	= 0
+		
+		while idx < len(bb_addr):
+			# Get the minimal loop detection block
+			first 	= bb_addr[idx]
+			middle 	= bb_addr[idx + 1]
+			last	= bb_addr[idx + 2]
+			
+			# Two-blocks loop check
+			if last == first:
+				'''This could the beginning of a large loop'''
+				verylast = bb_addr[idx + 3]
+				
+				if verylast == middle:
+					'''Definitely looping between a -> b'''
+					loop += 1
+					idx += 2
+				else:
+					'''Not a loop or loop exit'''
+					if loop > 0:
+			
+		
+		
+		
+		
 		
 	def usage(self):
 		'''On screen help'''
