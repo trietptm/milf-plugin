@@ -1036,7 +1036,7 @@ class IDAnalyzer():
 		analyzed_trace = self._find_trace_loops(bb_addresses)
 		
 		# Love lambda functions :)
-		TraceElements = [[GetFunctionName(x), hex(x), idc.GetDisasm(x)] for x in bb_addresses]
+		TraceElements = [[GetFunctionName(x[0]), hex(x[0]), idc.GetDisasm(x[0]), x[1]] for x in bb_addresses]
 		MilfBBTraceSelector("Basic blocks hit during Intel's PIN trace", TraceElements, 0, parent = self).show()
 			
 		
@@ -1049,30 +1049,35 @@ class IDAnalyzer():
 				 indicate the number of times the loop occurred or empty string if none.
 		'''
 		
-		idx 	= 0
-		loop 	= 0
+		idx 			= 0
+		loop 			= 0
+		analyzed_trace 	= list()
+		
 		
 		while idx < len(bb_addr):
-			# Get the minimal loop detection block
-			first 	= bb_addr[idx]
-			middle 	= bb_addr[idx + 1]
-			last	= bb_addr[idx + 2]
+			# Maybe not the optimal solution but clear.
+			a = bb_addr[idx]
+			b = bb_addr[idx + 1]
+			c = bb_addr[idx + 2]
+			d = bb_addr[idx + 3]
 			
-			# Two-blocks loop check
-			if last == first:
-				'''This could the beginning of a large loop'''
-				verylast = bb_addr[idx + 3]
-				
-				if verylast == middle:
-					'''Definitely looping between a -> b'''
-					loop += 1
+			# Two blocks loop check here
+			if a == c and b == d:
+				# We have found a loop block (abab)
+				loop += 1
+				idx += 2
+			else:
+				if loop == 0:	# Loop block not found
+					analyzed_trace.append((bb_addr[idx], ""))
+					idx += 1
+				else:			# End of loop block
+					loop = 0
+					analyzed_trace.append((bb_addr[idx], ""))
+					analyzed_trace.append((bb_addr[idx + 1], " (loop occurrs %d times)" % loop))
 					idx += 2
-				else:
-					'''Not a loop or loop exit'''
-					if loop > 0:
-			
 		
 		
+		return analyzed_trace
 		
 		
 		
@@ -1635,7 +1640,7 @@ class MilfBBTraceSelector(Choose2):
 	'''
 	
 	def __init__(self, title, items, icon, parent, embedded = False):
-		Choose2.__init__(self, title, [["Function", 20], ["Address", 8], ["Disassembly", 20]], embedded = embedded)
+		Choose2.__init__(self, title, [["Function", 20], ["Address", 8], ["Disassembly", 20], ["Comment", 25]], embedded = embedded)
 		self.items = items
 		self.icon = icon
 		
